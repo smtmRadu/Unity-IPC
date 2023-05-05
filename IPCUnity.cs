@@ -28,7 +28,7 @@ public class IPCUnity
         if (Instance == null)
             Instance = new IPCUnity();
         else
-            throw new System.Exception("IPCHandlerPPO already instantiated!.");
+            throw new System.Exception("IPCUnity already instantiated!.");
 
         MessagesRecv = new ConcurrentQueue<IPCMessage>();
 
@@ -67,7 +67,7 @@ public class IPCUnity
     /// </summary>
     public static void Dispose()
     {
-        Instance.process.Close();
+        Instance.process?.Close();
         Instance.reader.Close();
         Instance.writer.Close();
         Instance.recvMessThread.Abort();
