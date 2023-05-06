@@ -17,7 +17,9 @@ public class IPCApp
     private static IPCApp Instance;
     private StreamReader reader;
     private StreamWriter writer;
+
     private Thread recvMessThread;
+    private static bool recvMessThread_isRunning;
     
 
 
@@ -41,6 +43,7 @@ public class IPCApp
 
         Instance.recvMessThread = new Thread(ReadMessages); 
         Instance.recvMessThread.Start();
+        recvMessThread_isRunning = true;
     }
     /// <summary>
     /// Send a message (command) to Unity.
@@ -59,7 +62,10 @@ public class IPCApp
     /// </summary>
     public static void Dispose()
     {
-        Instance.recvMessThread?.Abort();
+        if (Instance == null)
+            return;
+
+        recvMessThread_isRunning = false;
         Instance = null;
     }
 
@@ -67,7 +73,7 @@ public class IPCApp
     
     private static void ReadMessages()
     {
-        while (true)
+        while (recvMessThread_isRunning)
         {
             string unityMessage = Instance.reader.ReadLine();
             if (unityMessage != null)

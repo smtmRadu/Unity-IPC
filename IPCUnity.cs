@@ -72,10 +72,14 @@ public class IPCUnity : MonoBehaviour
     /// </summary>
     public static void Dispose()
     {
+        if (Instance == null)
+            return;
+
         Instance.process?.Close();
         Instance.reader.Close();
         Instance.writer.Close();
         Instance.recvMessThread.Abort();
+        Destroy(Instance.gameObject);
         Instance = null;
     }
 
