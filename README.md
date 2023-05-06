@@ -8,17 +8,18 @@ This tool uses pipes to provide data transfering between Unity and any other app
 - IPCMessage: This class must belong to both.
 
 ### IPCMessage class
-This class represents the message object sent between the pipes and is fully customizable. In order to modify each message format, change the fields and constructors of this class accordingly. Though, **parametrized**, **default** and **copy** constructors are necessary (see script example). It is highly recommended to specify IPCMessage types for applications joining, as well as for leaving in order handle connection breaking automatically when the counterpart app was closed.
+This class represents the message object sent between the pipes and is fully customizable. If needs modification, change the fields and constructors of this class accordingly. (remember, **parametrized**, **default** and **copy** constructors are necessary). It is highly recommended to specify IPCMessage types for applications joining, as well as for leaving in order handle connection breaking automatically when the counterpart app was closed. **Server application must always instantiate IPC class first.**
 
 ### IPCUnity and IPCApp classes
-Requires Newtonsoft package to be installed on the non-Unity app via NuGet. Both classes are singleton, similar, featuring the following static methods and components:
+**Requires Newtonsoft.Json** package to be installed on both applications. On each side, they are singleton, similar, featuring the following static methods and components:
 
-- Initialize() -> Initializes the IPC handler. If is the case, Unity method can also start the secondary app by parsing the app executable file path and execution args. Must be called in the beggining by both apps (not simultaneously necessarily).
-- SendMessage() -> Sends a message of type IPCMessage from Unity/App to the other one.
-- Dispose() -> Stops the connection between the apps. If the secondary app was started from Unity, this method also closes that app.
+- Instatiate(**bool** isServer) -> Initializes the IPC handler. 
+- SendMessage(**IPCMessage** message) -> Sends a message from Unity/App to the other one.
+- Dispose() -> Stops the connection between the apps. [Unity Only: This method also closes the process started if is the case]
 - MessagesRecv -> A thread-safe Queue that stores all messages received from the counterpart app. In order to safely extract and execute a message, this must be Dequeued.
 
-### Example of use from Unity
+- StartApplication(**string** path, **params string[]** args) [Unity Only] -> Starts a new process running the executable at that path.
+### Unity as **server**
 ```csharp
 using UnityEngine;
 
@@ -26,7 +27,9 @@ public class IPCTester : MonoBehaviour
 {
     private void Start()
     {
-        IPCUnity.Initialize();
+        //Start the other app (if is not already running)
+        IPCUnity.StartApplication("...\\app.exe");
+        IPCUnity.Instantiate(true);
     }
 
     private void FixedUpdate()
@@ -34,16 +37,17 @@ public class IPCTester : MonoBehaviour
         // Handle messages from 2nd app
         IPCMessage message;
         IPCUnity.MessagesRecv.TryDequeue(out message);
-        if (message != null && message.type == CommandType.Message)        
-            Debug.Log("[Other application]: " + message.desc);
-        
 
-        // Send a message every 1 second to 2nd app
-        if (Time.frameCount % 50 == 0) IPCUnity.SendMessage(new IPCMessage(CommandType.Message, "Hello from Unity!"));
+        if (message != null)        
+            Debug.Log("[Other application]: " + System.Convert.ToString(message.data[0]));
+        
+        // Send a message every 1 second to 2nd app (considering Time.fixedDeltaTime = 0.02)
+        if (Time.frameCount % 50 == 0) 
+            IPCUnity.SendMessage(new IPCMessage("Hello from Unity!"));
     }
 }
 ```
-### Example of use from secondary app
+### App as **client**
 ```csharp
 using System.Threading;
 
@@ -51,20 +55,20 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        IPCApp.Initialize();
+        IPCApp.Instantiate(false);
 
         // Handle messages from Unity
         Thread recvMessages = new Thread(ReadMessages);
         recvMessages.Start();
-
+    
         // Send a message every 1 second to Unity
         Thread sendMessages = new Thread(SendMessages);
         sendMessages.Start();
     }
 
     public static void SendMessages()
-    {
-        IPCApp.SendMessage(new IPCMessage.SendMessage(new IPCMessage(CommandType.Message, "Hello from 2ndApp!"));
+    {  
+        IPCApp.SendMessage(new IPCMessage.SendMessage(new IPCMessage("Hello from 2ndApp!"));
         Thread.CurrentThread.Sleep(1000);
     }
     public static void ReadMessages()
@@ -74,21 +78,11 @@ public class Program
             IPCMessage message;
             IPCApp.MessagesRecv.TryDequeue(out message);
 
-            // Handle message commands separately
             if(message == null)
                 return;
 
-            if(message.type == CommandType.Message)
-            {
-                Console.WriteLine(message.desc);
-                return;
-            }
-            
-            if(...)
-            {
-                ...;
-                return;
-            }
+            // Handle message types separatelly (if is the case)
+            Console.WriteLine("[Unity]: " + System.Convert.ToString(message.data[0]));
         }
     }
 }

@@ -3,26 +3,15 @@
 /// </summary>
 public class IPCMessage
 {
-    public CommandType type;
-    public string desc;
-    public double[] vals;
-    public IPCMessage(CommandType type, string description, double[] values)
+    public object[] data;
+
+    public IPCMessage(params object[] data)
     {
-        this.type = type;
-        this.desc = description;
-        this.vals = values;
+        this.data = data;
     }
     public IPCMessage(IPCMessage other)
     {
-        this.type = other.type;
-        this.desc = other.desc;
-        this.vals = other.vals;
+        this.data = other.data;
     }
     public IPCMessage() { /*Default constructor is required.*/ }
-}
-public enum CommandType
-{
-    Message,
-    ForwardValues,
-    BackwardValues,
 }

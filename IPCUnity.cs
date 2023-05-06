@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using UnityEngine;
+using Newtonsoft.Json;
+using Unity.VisualScripting;
 
 public class IPCUnity : MonoBehaviour 
 {
@@ -20,11 +22,25 @@ public class IPCUnity : MonoBehaviour
     private StreamReader reader;
     private Thread recvMessThread;
 
-    
     /// <summary>
-    /// Initializes IPC between Unity and other application. Runs app executable if path is provided.
+    /// Starts a new process by running the executable at path provided. When IPCUnity is destroyed, the app closes.
     /// </summary>
-    public static void Initialize(string applicationPath = null, params string[] args)
+    public static void StartApplication(string applicationPath = null, params string[] args)
+    {
+        if(Instance.process != null)
+            Instance.process.Kill();
+
+        Instance.process = new Process();
+        Instance.process.StartInfo.FileName = applicationPath;
+        Instance.process.StartInfo.UseShellExecute = false;
+        Instance.process.StartInfo.Arguments = string.Join(" ", args);
+        Instance.process.Start();
+    }
+    /// <summary>
+    /// Initializes IPC between Unity and other application.
+    /// </summary>
+    /// <param name="isServer"> The server must start first the IPC. Server app creates the pipes and tmp directory.</param>
+    public static new void Instantiate(bool isServer)
     {
         if (Instance == null)
         {
@@ -37,23 +53,24 @@ public class IPCUnity : MonoBehaviour
 
         MessagesRecv = new ConcurrentQueue<IPCMessage>();
 
-        if (!Directory.Exists(pipesFolder)) Directory.CreateDirectory(pipesFolder);
-        if (!File.Exists(unityPipe)) File.Create(unityPipe).Dispose();      
-        Instance.writer = new StreamWriter(new FileStream(unityPipe, FileMode.Truncate, FileAccess.Write, FileShare.Read));
-        Instance.reader = new StreamReader(new FileStream(appPipe, FileMode.OpenOrCreate, FileAccess.Read, FileShare.Write));
-        Instance.reader.ReadToEnd();
+        if (isServer)
+        {
+            if (!Directory.Exists(pipesFolder)) Directory.CreateDirectory(pipesFolder);
+            if (File.Exists(unityPipe)) File.Delete(unityPipe);
+            if (File.Exists(appPipe)) File.Delete(appPipe);
+            Instance.writer = new StreamWriter(new FileStream(unityPipe, FileMode.Create, FileAccess.ReadWrite, FileShare.ReadWrite));
+            Instance.reader = new StreamReader(new FileStream(appPipe, FileMode.Create, FileAccess.ReadWrite, FileShare.ReadWrite));
+        }
+        else
+        {
+            Instance.writer = new StreamWriter(new FileStream(unityPipe, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite));
+            Instance.reader = new StreamReader(new FileStream(appPipe, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite));
+            Instance.reader.ReadToEnd();
+        }
+       
+        
         Instance.recvMessThread = new Thread(ReadMessages);
         Instance.recvMessThread.Start();
-
-
-        if (applicationPath != null)
-        {
-            Instance.process = new Process();
-            Instance.process.StartInfo.FileName = applicationPath;
-            Instance.process.StartInfo.UseShellExecute = false;
-            Instance.process.StartInfo.Arguments = string.Join(" ", args);
-            Instance.process.Start();
-        }
     }
     /// <summary>
     /// Send a message (command) to other application.
@@ -64,26 +81,17 @@ public class IPCUnity : MonoBehaviour
         if (Instance == null)
             throw new System.Exception("IPCUnity not instantiated!");
 
-        Instance.writer.WriteLine(JsonUtility.ToJson(message));
-        Instance.writer.Flush();
+        lock (Instance.writer)
+        {
+            Instance.writer.WriteLine(JsonConvert.SerializeObject(message));
+            Instance.writer.Flush();
+        }
+
+        
     }
     /// <summary>
     /// Stops IPC between Unity and this application.
     /// </summary>
-    public static void Dispose()
-    {
-        if (Instance == null)
-            return;
-
-        Instance.process?.Close();
-        Instance.reader.Close();
-        Instance.writer.Close();
-        Instance.recvMessThread.Abort();
-        Destroy(Instance.gameObject);
-        Instance = null;
-    }
-
-
 
     private static void ReadMessages()
     {
@@ -92,10 +100,9 @@ public class IPCUnity : MonoBehaviour
             string appMessage = Instance.reader.ReadLine();
             if (appMessage != null)
             {
-                MessagesRecv.Enqueue(new IPCMessage(JsonUtility.FromJson<IPCMessage>(appMessage)));
+                MessagesRecv.Enqueue(new IPCMessage(JsonConvert.DeserializeObject<IPCMessage>(appMessage)));
             }
         }
-        Thread.CurrentThread.Abort();
     }
     private void Awake()
     {
@@ -108,5 +115,14 @@ public class IPCUnity : MonoBehaviour
             Instance = this;
         }
     }
-    private void OnApplicationQuit() => Dispose();
+
+
+    private void OnDestroy()
+    {
+        Instance.process?.Close();
+        Instance.reader.Close();
+        Instance.writer.Close();
+        Instance.recvMessThread?.Abort();
+        Instance = null;
+    }
 }
