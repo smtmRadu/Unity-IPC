@@ -1,10 +1,10 @@
 
 # Unity IPC
 
-This tool uses pipes to provide data transfering between Unity and any other application. The following (class name editable) scripts are provided:
+This tool uses file-sharing to provide data transfering between Unity and any other application. The following scripts are provided:
 
 - IPCUnity: This class must belong to your Unity project.
-- IPCApp: This class must belong to your secondary app. 
+- IPCApp: This class must belong to your the other app. 
 - IPCMessage: This class must belong to both.
 
 ### IPCMessage class
@@ -68,7 +68,7 @@ public class Program
 
     public static void SendMessages()
     {  
-        IPCApp.SendMessage(new IPCMessage.SendMessage(new IPCMessage("Hello from 2ndApp!"));
+        IPCApp.SendMessage(new IPCMessage("Hello from 2ndApp!"));
         Thread.CurrentThread.Sleep(1000);
     }
     public static void ReadMessages()
