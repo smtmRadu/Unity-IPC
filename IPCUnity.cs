@@ -2,8 +2,9 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using UnityEngine;
 
-public class IPCUnity
+public class IPCUnity : MonoBehaviour 
 {
     /// <summary>
     /// This buffer collects all messages (commands) received from other application. Execute each command by Dequeueing.
@@ -26,7 +27,11 @@ public class IPCUnity
     public static void Initialize(string applicationPath = null, params string[] args)
     {
         if (Instance == null)
-            Instance = new IPCUnity();
+        {
+            GameObject go = new GameObject("IPCUnity");
+            go.AddComponent<IPCUnity>();
+            DontDestroyOnLoad(go);
+        }
         else
             throw new System.Exception("IPCUnity already instantiated!.");
 
@@ -59,7 +64,7 @@ public class IPCUnity
         if (Instance == null)
             throw new System.Exception("IPCUnity not instantiated!");
 
-        Instance.writer.WriteLine(message.Encode());
+        Instance.writer.WriteLine(JsonUtility.ToJson(message));
         Instance.writer.Flush();
     }
     /// <summary>
@@ -80,12 +85,24 @@ public class IPCUnity
     {
         while (true)
         {
-            string unityMessage = Instance.reader.ReadLine();
-            if (unityMessage != null)
+            string appMessage = Instance.reader.ReadLine();
+            if (appMessage != null)
             {
-                MessagesRecv.Enqueue(new IPCMessage(unityMessage));
+                MessagesRecv.Enqueue(new IPCMessage(JsonUtility.FromJson<IPCMessage>(appMessage)));
             }
         }
+        Thread.CurrentThread.Abort();
     }
-    private IPCUnity() { }
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(this);
+        }
+        else
+        {
+            Instance = this;
+        }
+    }
+    private void OnApplicationQuit() => Dispose();
 }

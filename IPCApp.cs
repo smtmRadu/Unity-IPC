@@ -1,8 +1,5 @@
-﻿using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.IO;
-using System.Threading;
-
+﻿using Newtonsoft.Json;
+using System.Collections.Concurrent;
 
 /// <summary>
 /// This class belongs to your console application.
@@ -54,7 +51,7 @@ public class IPCApp
         if (Instance == null)
             throw new System.Exception("IPCApp not instantiated!");
 
-        Instance.writer.WriteLine(message.Encode());
+        Instance.writer.WriteLine(JsonConvert.SerializeObject(message));
         Instance.writer.Flush();
     }
     /// <summary>
@@ -62,7 +59,7 @@ public class IPCApp
     /// </summary>
     public static void Dispose()
     {
-        Instance.recvMessThread.Abort();
+        Instance.recvMessThread?.Abort();
         Instance = null;
     }
 
@@ -75,7 +72,7 @@ public class IPCApp
             string unityMessage = Instance.reader.ReadLine();
             if (unityMessage != null)
             {
-                MessagesRecv.Enqueue(new IPCMessage(unityMessage));
+                MessagesRecv.Enqueue(new IPCMessage(JsonConvert.DeserializeObject<IPCMessage>(unityMessage)));
             }
         }
     }
